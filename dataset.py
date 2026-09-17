@@ -133,7 +133,7 @@ class IMDBDataset(Dataset):
         label = self.labels[idx]
 
         # BERT Tokenization with truncation, padding, and attention mask creation
-        encoding = self.tokenizer.encode_plus(
+        encoding = self.tokenizer(
             text,
             add_special_tokens=True,      # Add '[CLS]' and '[SEP]'
             max_length=self.max_len,       # Truncate or pad to max_len
