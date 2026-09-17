@@ -29,89 +29,84 @@ def clean_text(text: str) -> str:
 
 def load_imdb_data(sample_mode: bool = config.SAMPLE_MODE, sample_size: int = config.SAMPLE_SIZE):
     """
-    Loads the IMDB Movie Reviews dataset.
+    Loads official IMDB Movie Reviews dataset using pre-split Train (25,000) and Test (25,000) splits.
     
     Args:
         sample_mode (bool): If True, samples a subset of reviews for fast execution/testing.
         sample_size (int): Total number of reviews to sample when sample_mode=True.
         
     Returns:
-        pd.DataFrame: Formatted DataFrame containing 'text' and 'label' columns.
+        tuple: (train_df, test_df)
     """
     print("Loading IMDB Movie Reviews dataset...")
     raw_ds = load_dataset("imdb")
     
+    # Load official pre-split Train (25,000) and Test (25,000) DataFrames
     train_df = pd.DataFrame(raw_ds['train'])
     test_df = pd.DataFrame(raw_ds['test'])
     
-    # Combine full dataset (50,000 reviews: 25k train, 25k test)
-    full_df = pd.concat([train_df, test_df], ignore_index=True)
-    
     # Clean review text
-    full_df['text'] = full_df['text'].apply(clean_text)
+    train_df['text'] = train_df['text'].apply(clean_text)
+    test_df['text'] = test_df['text'].apply(clean_text)
     
-    if sample_mode and sample_size < len(full_df):
-        print(f"[SAMPLE MODE ACTIVE] Sampling {sample_size} reviews from full {len(full_df):,} dataset...")
-        # Stratified sampling to maintain exact class balance
-        full_df = full_df.groupby('label', group_keys=False).apply(
-            lambda x: x.sample(n=sample_size // 2, random_state=config.RANDOM_SEED)
+    if sample_mode and sample_size < (len(train_df) + len(test_df)):
+        print(f"[SAMPLE MODE ACTIVE] Sampling {sample_size} reviews from dataset...")
+        train_sample = int(sample_size * 0.8)
+        test_sample = sample_size - train_sample
+        train_df = train_df.groupby('label', group_keys=False).apply(
+            lambda x: x.sample(n=train_sample // 2, random_state=config.RANDOM_SEED)
+        ).reset_index(drop=True)
+        test_df = test_df.groupby('label', group_keys=False).apply(
+            lambda x: x.sample(n=test_sample // 2, random_state=config.RANDOM_SEED)
         ).reset_index(drop=True)
     else:
-        print(f"[FULL DATASET ACTIVE] Loaded complete {len(full_df):,} reviews.")
+        print(f"[FULL DATASET ACTIVE] Loaded official Train ({len(train_df):,}) and Test ({len(test_df):,}) splits.")
         
-    return full_df
+    return train_df, test_df
 
 
-def perform_eda(df: pd.DataFrame):
+def perform_eda(train_df: pd.DataFrame, test_df: pd.DataFrame):
     """
     Explores the dataset and prints summary statistics:
-    - Positive & Negative review counts
-    - Text length (word count & character count) statistics
-    - Class distribution check
+    - Positive & Negative review counts across official Train & Test sets.
     """
     print("\n" + "=" * 60)
     print("           EXPLORATORY DATA ANALYSIS (EDA)")
     print("=" * 60)
     
-    total_reviews = len(df)
-    label_counts = df['label'].value_counts()
-    pos_count = label_counts.get(1, 0)
-    neg_count = label_counts.get(0, 0)
+    total_train = len(train_df)
+    total_test = len(test_df)
+    total_reviews = total_train + total_test
     
-    print(f"Total Reviews Analyzed      : {total_reviews:,}")
-    print(f"Number of Positive Reviews (1): {pos_count:,} ({pos_count / total_reviews * 100:.2f}%)")
-    print(f"Number of Negative Reviews (0): {neg_count:,} ({neg_count / total_reviews * 100:.2f}%)")
+    train_pos = (train_df['label'] == 1).sum()
+    train_neg = (train_df['label'] == 0).sum()
+    test_pos = (test_df['label'] == 1).sum()
+    test_neg = (test_df['label'] == 0).sum()
     
+    print(f"Total Reviews Loaded        : {total_reviews:,}")
+    print(f"Official Train Split (25k)  : {total_train:,} (Pos: {train_pos:,}, Neg: {train_neg:,})")
+    print(f"Official Test Split (25k)   : {total_test:,} (Pos: {test_pos:,}, Neg: {test_neg:,})")
     print("=" * 60 + "\n")
 
 
-def prepare_data_splits(df: pd.DataFrame, test_size: float = config.TEST_SIZE, val_size: float = config.VAL_SIZE):
+def prepare_data_splits(train_df: pd.DataFrame, test_df: pd.DataFrame, val_size: float = config.VAL_SIZE):
     """
-    Splits the dataset into Training, Validation, and Test sets using stratified sampling.
+    Uses official IMDB Train (25,000) and Test (25,000) datasets directly.
+    Splits a validation set from Train for Early Stopping monitoring.
     """
-    # First split: Separate Test set from Train+Val
-    train_val_df, test_df = train_test_split(
-        df,
-        test_size=test_size,
+    train_sub_df, val_df = train_test_split(
+        train_df,
+        test_size=val_size,
         random_state=config.RANDOM_SEED,
-        stratify=df['label']
+        stratify=train_df['label']
     )
     
-    # Second split: Separate Validation set from Training set
-    adjusted_val_size = val_size / (1.0 - test_size)
-    train_df, val_df = train_test_split(
-        train_val_df,
-        test_size=adjusted_val_size,
-        random_state=config.RANDOM_SEED,
-        stratify=train_val_df['label']
-    )
+    print(f"Data Split Summary (Official IMDB Pre-Split):")
+    print(f"  Training Set   : {len(train_sub_df):,} samples ({len(train_sub_df)/len(train_df)*100:.1f}% of Train split)")
+    print(f"  Validation Set : {len(val_df):,} samples ({len(val_df)/len(train_df)*100:.1f}% of Train split)")
+    print(f"  Test Set       : {len(test_df):,} samples (100% Official Test split)")
     
-    print(f"Data Split Summary:")
-    print(f"  Training Set   : {len(train_df):,} samples ({len(train_df)/len(df)*100:.1f}%)")
-    print(f"  Validation Set : {len(val_df):,} samples ({len(val_df)/len(df)*100:.1f}%)")
-    print(f"  Test Set       : {len(test_df):,} samples ({len(test_df)/len(df)*100:.1f}%)")
-    
-    return train_df.reset_index(drop=True), val_df.reset_index(drop=True), test_df.reset_index(drop=True)
+    return train_sub_df.reset_index(drop=True), val_df.reset_index(drop=True), test_df.reset_index(drop=True)
 
 
 class IMDBDataset(Dataset):

@@ -61,14 +61,14 @@ def main():
     print("=" * 60, flush=True)
 
 
-    # Step 1: Load IMDB Data
-    df = load_imdb_data(sample_mode=sample_mode, sample_size=sample_size)
+    # Step 1: Load IMDB Data (Official Pre-Split Train & Test sets)
+    raw_train_df, raw_test_df = load_imdb_data(sample_mode=sample_mode, sample_size=sample_size)
     
     # Step 2: Exploratory Data Analysis (EDA)
-    perform_eda(df)
+    perform_eda(raw_train_df, raw_test_df)
     
-    # Step 3: Split Data into Train, Validation, Test sets
-    train_df, val_df, test_df = prepare_data_splits(df)
+    # Step 3: Prepare Data Splits (Train, Validation, Test)
+    train_df, val_df, test_df = prepare_data_splits(raw_train_df, raw_test_df)
     
     # Step 4: Tokenization & PyTorch DataLoaders
     tokenizer = get_tokenizer(model_name)

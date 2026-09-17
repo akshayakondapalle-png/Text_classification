@@ -31,10 +31,10 @@ MODEL_SAVE_PATH = 'best_bert_sentiment_model.pt'
 
 # Device selection (Apple Silicon MPS -> CUDA -> CPU)
 def get_device():
-    if torch.cuda.is_available():
-        return torch.device('cuda')
-    elif torch.backends.mps.is_available():
+    if torch.backends.mps.is_available():
         return torch.device('mps')
+    elif torch.cuda.is_available():
+        return torch.device('cuda')
     else:
         return torch.device('cpu')
 
